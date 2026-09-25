@@ -1,0 +1,99 @@
+{
+  "name": "Python wheel verification",
+  "on": {
+    "create": {}
+  },
+  "permissions": {},
+  "jobs": {
+    "intel": {
+      "name": "intel",
+      "runs-on": "macos-15-intel",
+      "timeout-minutes": 30,
+      "if": "github.ref == 'refs/heads/verify/python-wheel-020495b8a80f4b4a8cb7f43ab498cf18'",
+      "defaults": {
+        "run": {
+          "shell": "bash"
+        }
+      },
+      "env": {
+        "PYTHONPATH": "",
+        "PYTHONHOME": ""
+      },
+      "steps": [
+        {
+          "name": "Prepare build tools",
+          "run": "export WHEEL_ROOT=\"$RUNNER_TEMP/wheel-check\"\necho \"WHEEL_ROOT=$WHEEL_ROOT\" >> \"$GITHUB_ENV\"\nmkdir -p \"$WHEEL_ROOT/tools\"\npython3 -m venv \"$WHEEL_ROOT/bootstrap\"\n\"$WHEEL_ROOT/bootstrap/bin/python\" -m pip install uv==0.11.32\necho \"$WHEEL_ROOT/bootstrap/bin\" >> \"$GITHUB_PATH\"\necho \"$WHEEL_ROOT/tools\" >> \"$GITHUB_PATH\"\ncurl --fail --location https://github.com/bazelbuild/bazel/releases/download/8.2.1/bazel-8.2.1-darwin-x86_64 -o \"$WHEEL_ROOT/tools/bazel\"\ncurl --fail --location https://github.com/bazelbuild/bazel/releases/download/8.2.1/bazel-8.2.1-darwin-x86_64.sha256 -o \"$WHEEL_ROOT/tools/checksum\"\ncd \"$WHEEL_ROOT/tools\"\nexpected=$(awk '{print $1}' checksum)\nprintf \"%s  bazel\\n\" \"$expected\" | shasum -a 256 -c -\nchmod 755 bazel"
+        },
+        {
+          "name": "Fetch exact candidate",
+          "run": "git init \"$WHEEL_ROOT/source\"\ngit -C \"$WHEEL_ROOT/source\" fetch --depth=1 https://github.com/stanbot8/benchmark.git 8e90290b366e359663f42cdb30de5173a3958b51\ngit -C \"$WHEEL_ROOT/source\" checkout --detach FETCH_HEAD\ntest \"$(git -C \"$WHEEL_ROOT/source\" rev-parse HEAD)\" = 8e90290b366e359663f42cdb30de5173a3958b51\ngit -C \"$WHEEL_ROOT/source\" ls-files --error-unmatch -- bindings/python/google_benchmark/example.py"
+        },
+        {
+          "name": "Create ordinary Python environment",
+          "run": "uv venv --python cpython-3.14-macos-x86_64-none \"$WHEEL_ROOT/consumer\"\n\"$WHEEL_ROOT/consumer/bin/python\" -I -c 'import sys,sysconfig,platform; assert sys.version_info[:2] == (3, 14); assert not sysconfig.get_config_var('\"'\"'Py_GIL_DISABLED'\"'\"'); print(sys.version); print(platform.platform()); print(platform.machine())'"
+        },
+        {
+          "name": "Build wheel",
+          "run": "cd \"$WHEEL_ROOT/source\"\nuv build --wheel --python \"$WHEEL_ROOT/consumer/bin/python\" --out-dir \"$WHEEL_ROOT/wheels\" .\ngit diff --exit-code HEAD"
+        },
+        {
+          "name": "Install wheel",
+          "run": "cd \"$WHEEL_ROOT\"\nset -- wheels/*.whl\ntest \"$#\" -eq 1\nshasum -a 256 \"$1\"\nuv pip install --python \"$WHEEL_ROOT/consumer/bin/python\" \"$1\""
+        },
+        {
+          "name": "Import installed wheel",
+          "run": "cd \"$WHEEL_ROOT\"\n\"$WHEEL_ROOT/consumer/bin/python\" -I -c 'import importlib,pathlib,sys; m=importlib.import_module('\"'\"'google_benchmark'\"'\"'); p=pathlib.Path(m.__file__).resolve(); assert p.is_relative_to(pathlib.Path(sys.prefix).resolve()), p; print(p)'"
+        },
+        {
+          "name": "Run repository example",
+          "run": "cd \"$WHEEL_ROOT\"\n\"$WHEEL_ROOT/consumer/bin/python\" -I \"$WHEEL_ROOT/source/bindings/python/google_benchmark/example.py\""
+        }
+      ]
+    },
+    "arm64": {
+      "name": "arm64",
+      "runs-on": "macos-15",
+      "timeout-minutes": 30,
+      "if": "github.ref == 'refs/heads/verify/python-wheel-020495b8a80f4b4a8cb7f43ab498cf18'",
+      "defaults": {
+        "run": {
+          "shell": "bash"
+        }
+      },
+      "env": {
+        "PYTHONPATH": "",
+        "PYTHONHOME": ""
+      },
+      "steps": [
+        {
+          "name": "Prepare build tools",
+          "run": "export WHEEL_ROOT=\"$RUNNER_TEMP/wheel-check\"\necho \"WHEEL_ROOT=$WHEEL_ROOT\" >> \"$GITHUB_ENV\"\nmkdir -p \"$WHEEL_ROOT/tools\"\npython3 -m venv \"$WHEEL_ROOT/bootstrap\"\n\"$WHEEL_ROOT/bootstrap/bin/python\" -m pip install uv==0.11.32\necho \"$WHEEL_ROOT/bootstrap/bin\" >> \"$GITHUB_PATH\"\necho \"$WHEEL_ROOT/tools\" >> \"$GITHUB_PATH\"\ncurl --fail --location https://github.com/bazelbuild/bazel/releases/download/8.2.1/bazel-8.2.1-darwin-arm64 -o \"$WHEEL_ROOT/tools/bazel\"\ncurl --fail --location https://github.com/bazelbuild/bazel/releases/download/8.2.1/bazel-8.2.1-darwin-arm64.sha256 -o \"$WHEEL_ROOT/tools/checksum\"\ncd \"$WHEEL_ROOT/tools\"\nexpected=$(awk '{print $1}' checksum)\nprintf \"%s  bazel\\n\" \"$expected\" | shasum -a 256 -c -\nchmod 755 bazel"
+        },
+        {
+          "name": "Fetch exact candidate",
+          "run": "git init \"$WHEEL_ROOT/source\"\ngit -C \"$WHEEL_ROOT/source\" fetch --depth=1 https://github.com/stanbot8/benchmark.git 8e90290b366e359663f42cdb30de5173a3958b51\ngit -C \"$WHEEL_ROOT/source\" checkout --detach FETCH_HEAD\ntest \"$(git -C \"$WHEEL_ROOT/source\" rev-parse HEAD)\" = 8e90290b366e359663f42cdb30de5173a3958b51\ngit -C \"$WHEEL_ROOT/source\" ls-files --error-unmatch -- bindings/python/google_benchmark/example.py"
+        },
+        {
+          "name": "Create ordinary Python environment",
+          "run": "uv venv --python cpython-3.14-macos-aarch64-none \"$WHEEL_ROOT/consumer\"\n\"$WHEEL_ROOT/consumer/bin/python\" -I -c 'import sys,sysconfig,platform; assert sys.version_info[:2] == (3, 14); assert not sysconfig.get_config_var('\"'\"'Py_GIL_DISABLED'\"'\"'); print(sys.version); print(platform.platform()); print(platform.machine())'"
+        },
+        {
+          "name": "Build wheel",
+          "run": "cd \"$WHEEL_ROOT/source\"\nuv build --wheel --python \"$WHEEL_ROOT/consumer/bin/python\" --out-dir \"$WHEEL_ROOT/wheels\" .\ngit diff --exit-code HEAD"
+        },
+        {
+          "name": "Install wheel",
+          "run": "cd \"$WHEEL_ROOT\"\nset -- wheels/*.whl\ntest \"$#\" -eq 1\nshasum -a 256 \"$1\"\nuv pip install --python \"$WHEEL_ROOT/consumer/bin/python\" \"$1\""
+        },
+        {
+          "name": "Import installed wheel",
+          "run": "cd \"$WHEEL_ROOT\"\n\"$WHEEL_ROOT/consumer/bin/python\" -I -c 'import importlib,pathlib,sys; m=importlib.import_module('\"'\"'google_benchmark'\"'\"'); p=pathlib.Path(m.__file__).resolve(); assert p.is_relative_to(pathlib.Path(sys.prefix).resolve()), p; print(p)'"
+        },
+        {
+          "name": "Run repository example",
+          "run": "cd \"$WHEEL_ROOT\"\n\"$WHEEL_ROOT/consumer/bin/python\" -I \"$WHEEL_ROOT/source/bindings/python/google_benchmark/example.py\""
+        }
+      ]
+    }
+  }
+}
