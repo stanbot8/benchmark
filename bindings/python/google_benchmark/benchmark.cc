@@ -38,8 +38,29 @@ std::vector<std::string> Initialize(const std::vector<std::string>& argv) {
 
 benchmark::Benchmark* RegisterBenchmark(const std::string& name,
                                         nb::callable f) {
-  return benchmark::RegisterBenchmark(
-      name, [f](benchmark::State& state) { f(&state); });
+  return benchmark::RegisterBenchmark(name, [f](benchmark::State& state) {
+    nb::gil_scoped_acquire acquire;
+    f(&state);
+  });
+}
+
+bool PythonKeepRunning(benchmark::State& state) {
+  const auto iterations = state.iterations();
+  const bool starting = iterations == 0;
+  const bool finishing = !starting && iterations == state.max_iterations;
+  if (!starting && !finishing) return state.KeepRunning();
+
+  const bool finish_timing = finishing && !state.skipped();
+  if (finish_timing) state.PauseTiming();
+  bool keep_running;
+  {
+    nb::gil_scoped_release release;
+    if (finish_timing) state.ResumeTiming();
+    keep_running = state.KeepRunning();
+    if (starting && keep_running) state.PauseTiming();
+  }
+  if (starting && keep_running) state.ResumeTiming();
+  return keep_running;
 }
 
 NB_MODULE(_benchmark, m) {
@@ -92,6 +113,7 @@ NB_MODULE(_benchmark, m) {
       .def("min_time", &Benchmark::MinTime, nb::rv_policy::reference)
       .def("min_warmup_time", &Benchmark::MinWarmUpTime,
            nb::rv_policy::reference)
+      .def("threads", &Benchmark::Threads, nb::rv_policy::reference)
       .def("iterations", &Benchmark::Iterations, nb::rv_policy::reference)
       .def("repetitions", &Benchmark::Repetitions, nb::rv_policy::reference)
       .def("report_aggregates_only", &Benchmark::ReportAggregatesOnly,
@@ -148,8 +170,8 @@ NB_MODULE(_benchmark, m) {
 
   using benchmark::State;
   nb::class_<State>(m, "State")
-      .def("__bool__", &State::KeepRunning)
-      .def_prop_ro("keep_running", &State::KeepRunning)
+      .def("__bool__", &PythonKeepRunning)
+      .def_prop_ro("keep_running", &PythonKeepRunning)
       .def("pause_timing", &State::PauseTiming)
       .def("resume_timing", &State::ResumeTiming)
       .def("skip_with_error", &State::SkipWithError)
@@ -179,8 +201,9 @@ NB_MODULE(_benchmark, m) {
 
   m.def("Initialize", Initialize);
   m.def("RegisterBenchmark", RegisterBenchmark, nb::rv_policy::reference);
-  m.def("RunSpecifiedBenchmarks",
-        []() { benchmark::RunSpecifiedBenchmarks(); });
+  m.def(
+      "RunSpecifiedBenchmarks", []() { benchmark::RunSpecifiedBenchmarks(); },
+      nb::call_guard<nb::gil_scoped_release>());
   m.def("ClearRegisteredBenchmarks", benchmark::ClearRegisteredBenchmarks);
   m.def("AddCustomContext", benchmark::AddCustomContext, nb::arg("key"),
         nb::arg("value"),
