@@ -4,6 +4,7 @@ import platform
 import re
 import shutil
 import sys
+import sysconfig
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,9 @@ IS_LINUX = platform.system() == "Linux"
 
 # hardcoded SABI-related options. Requires that each Python interpreter
 # (hermetic or not) participating is of the same major-minor version.
-py_limited_api = sys.version_info >= (3, 12)
+py_limited_api = sys.version_info >= (3, 12) and not sysconfig.get_config_var(
+    "Py_GIL_DISABLED"
+)
 options = {"bdist_wheel": {"py_limited_api": "cp312"}} if py_limited_api else {}
 
 
@@ -72,6 +75,15 @@ class BazelExtension(setuptools.Extension):
         self.relpath, self.target_name = stripped_target.split(":")
 
 
+def _extend_bazel_argv(bazel_argv: list) -> None:
+    if sysconfig.get_config_var("Py_GIL_DISABLED"):
+        bazel_argv += [
+            "--@rules_python//python/config_settings:py_freethreaded=yes"
+        ]
+        if IS_WINDOWS:
+            bazel_argv += ["--cxxopt=/DPy_GIL_DISABLED=1"]
+
+
 class BuildBazelExtension(build_ext.build_ext):
     """A command that runs Bazel to build a C/C++ extension."""
 
@@ -109,6 +121,8 @@ class BuildBazelExtension(build_ext.build_ext):
 
         if ext.py_limited_api:
             bazel_argv += ["--@nanobind_bazel//:py-limited-api=cp312"]
+
+        _extend_bazel_argv(bazel_argv)
 
         if IS_WINDOWS:
             # Link with python*.lib.
