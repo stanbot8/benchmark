@@ -276,6 +276,16 @@ ADD_COMPLEXITY_CASES(complexity_capture_name, complexity_capture_name + "_BigO",
 
 void BM_Complexity_O_N_ms(benchmark::State& state) {
   for (auto _ : state) {
+    // This test requires a non-zero CPU time to avoid divide-by-zero
+    benchmark::DoNotOptimize(state.iterations());
+    double tmp = static_cast<double>(state.iterations());
+    benchmark::DoNotOptimize(tmp);
+    for (benchmark::IterationCount i = 0; i < state.iterations(); ++i) {
+      benchmark::DoNotOptimize(state.iterations());
+      tmp *= static_cast<double>(state.iterations());
+      benchmark::DoNotOptimize(tmp);
+    }
+
     // 1us per iteration per entry, the 2048 size 50% slower so the RMS is
     // above zero, reported in milliseconds
     const double skew = (state.range(0) & (1 << 11)) ? 1.5 : 1.0;
