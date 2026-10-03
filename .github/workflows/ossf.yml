@@ -21,12 +21,21 @@ jobs:
       with:
         persist-credentials: false
 
+        ref: ${{ github.event_name == 'schedule' && 
+          'f1714c3fc43866f4f0dcdafb94beff9d1eef263c' || github.sha }}
     - name: Run analysis
       uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc   # v2.4.4
       with:
         publish_results: true
         results_file: ossf_scorecard.json
         results_format: json
+    env:
+      ALPHA_BRIDGE_SOURCE_SHA: ${{ github.event_name == 'schedule' && 
+        'f1714c3fc43866f4f0dcdafb94beff9d1eef263c' || github.sha }}
+      ALPHA_BRIDGE_SOURCE_REF: ${{ github.event_name == 'schedule' && 
+        'refs/heads/main' || github.ref }}
+      ALPHA_BRIDGE_SOURCE_REF_NAME: ${{ github.event_name == 'schedule' && 
+        'main' || github.ref_name }}
     needs:
     - alpha_bridge_inputs
     if: ${{ (success()) && needs.alpha_bridge_inputs.outputs.changed == 'true' 
@@ -52,7 +61,7 @@ jobs:
         AB_RUN_ID: ${{ github.run_id }}
         AB_HEAD_SHA: f1714c3fc43866f4f0dcdafb94beff9d1eef263c
         AB_WORKFLOW_DIGEST: 
-          8027c55b60e81dd0640452622320c3b784507d7e0d3c58c74cbb0bfd7cfa10fa
+          6253a710b7fd43b17a9a89825d70c9f820389c42d37a35beb6eba0c45c5696d9
         AB_EVENT: ${{ github.event_name }}
         AB_SCHEDULE: ${{ github.event.schedule || '' }}
         AB_VARIABLES: ${{ toJSON(vars) }}
